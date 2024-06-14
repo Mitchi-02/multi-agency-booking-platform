@@ -1,0 +1,90 @@
+stages:
+  - build
+  - deploy
+
+.default_rules:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+variables:
+  GIT_CLONE_PATH: $CI_BUILDS_DIR/$CI_PROJECT_NAME
+
+after_script:
+  - echo "DONE.."
+
+build_images:
+  rules:
+    - !reference [.default_rules, rules]
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
+  script:
+    - cd $CI_BUILDS_DIR/$CI_PROJECT_NAME/deployment
+    - chmod +x build.sh
+    - ./build.sh
+    - chmod +x build.dev.sh
+    - ./build.dev.sh
+  timeout: 3 hours
+  tags:
+    - 2cs-back
+
+deploy1:
+  rules:
+    - !reference [.default_rules, rules]
+  stage: deploy
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
+  script:
+    - cd $CI_BUILDS_DIR/$CI_PROJECT_NAME/deployment/prod
+    - docker compose --file docker-compose.yml down --rmi all
+    - docker compose --file docker-compose.yml pull
+
+    - echo "JWT_SECRET=$CI_JWT_SECRET" >> .env
+    - echo "USERS_DB_USERNAME=$CI_USERS_DB_USERNAME" >> .env
+    - echo "USERS_DB_PASSWORD=$CI_USERS_DB_PASSWORD" >> .env
+    - echo "NOTIFICATIONS_DB_USERNAME=$CI_NOTIFICATIONS_DB_USERNAME" >> .env
+    - echo "NOTIFICATIONS_DB_PASSWORD=$CI_NOTIFICATIONS_DB_PASSWORD" >> .env
+    - echo "HIKES_DB_USERNAME=$CI_HIKES_DB_USERNAME" >> .env
+    - echo "HIKES_DB_PASSWORD=$CI_HIKES_DB_PASSWORD" >> .env
+    - echo "TRAVELS_DB_USERNAME=$CI_TRAVELS_DB_USERNAME" >> .env
+    - echo "TRAVELS_DB_PASSWORD=$CI_TRAVELS_DB_PASSWORD" >> .env
+    - echo "PAYMENT_DB_USERNAME=$CI_PAYMENT_DB_USERNAME" >> .env
+    - echo "PAYMENT_DB_PASSWORD=$CI_PAYMENT_DB_PASSWORD" >> .env
+    - echo "REQUESTS_DB_USERNAME=$CI_REQUESTS_DB_USERNAME" >> .env
+    - echo "REQUESTS_DB_PASSWORD=$CI_REQUESTS_DB_PASSWORD" >> .env
+    - echo "MAIL_USERNAME=$CI_MAIL_USERNAME" >> .env
+    - echo "MAIL_PASSWORD=$CI_MAIL_PASSWORD" >> .env
+    - echo "MAIL_FROM=$CI_MAIL_FROM" >> .env
+    - echo "GOOGLE_STORAGE_PROJECT_ID=$CI_GOOGLE_STORAGE_PROJECT_ID" >> .env
+    - echo "GOOGLE_STORAGE_CLIENT_EMAIL=$CI_GOOGLE_STORAGE_CLIENT_EMAIL" >> .env
+    - echo "GOOGLE_STORAGE_PRIVATE_KEY=$CI_GOOGLE_STORAGE_PRIVATE_KEY" >> .env
+    - echo "GOOGLE_STORAGE_BUCKET=$CI_GOOGLE_STORAGE_BUCKET" >> .env
+    - echo "GOOGLE_STORAGE_CLIENT_ID=$CI_GOOGLE_STORAGE_CLIENT_ID" >> .env
+    - echo "GOOGLE_STORAGE_PRIVATE_KEY_ID=$CI_GOOGLE_STORAGE_PRIVATE_KEY_ID" >> .env
+    - echo "STRIPE_SECRET_KEY=$CI_STRIPE_SECRET_KEY" >> .env
+    - echo "STRIPE_WEBHOOK_SECRET=$CI_STRIPE_WEBHOOK_SECRET" >> .env
+    - echo "CACHE_PASSWORD=$CI_CACHE_PASSWORD" >> .env
+
+
+    - echo "KAFKA_USERS_TOPIC=users_topic" >> .env
+
+    - echo "KAFKA_TRAVELS_TOPIC=travels_topic" >> .env
+    - echo "KAFKA_TRAVEL_AGENCIES_TOPIC=travel_agencies_topic" >> .env
+    - echo "KAFKA_TRAVEL_BOOKINGS_TOPIC=travel_bookings_topic" >> .env
+    - echo "KAFKA_TRAVEL_PAYMENTS_TOPIC=travel_payments_topic" >> .env
+    - echo "KAFKA_TRAVEL_REVIEWS_TOPIC=travel_reviews_topic" >> .env
+
+    - echo "KAFKA_HIKES_TOPIC=hikes_topic" >> .env
+    - echo "KAFKA_HIKE_AGENCIES_TOPIC=hike_agencies_topic" >> .env
+    - echo "KAFKA_HIKE_BOOKINGS_TOPIC=hike_bookings_topic" >> .env
+    - echo "KAFKA_HIKE_PAYMENTS_TOPIC=hike_payments_topic" >> .env
+    - echo "KAFKA_HIKE_REVIEWS_TOPIC=hike_reviews_topic" >> .env
+
+    - docker compose --file docker-compose.yml up -d
+    - rm .env
+  environment: production
+  tags:
+    - 2cs-back

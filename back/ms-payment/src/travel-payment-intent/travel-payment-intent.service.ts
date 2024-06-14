@@ -1,0 +1,90 @@
+import { Injectable } from "@nestjs/common"
+import { InjectRepository } from "@nestjs/typeorm"
+import { TravelPayment } from "src/models/travel-payment.entity"
+import { StripeService } from "src/stripe/stripe.service"
+import { Repository } from "typeorm"
+import { PaymentMethod } from "src/models"
+import { QueryCacheService } from "src/query-cache/query-cache.service"
+import { KafkaService } from "src/kafka/kafka.service"
+import { TravelPaymentUpdatedEvent } from "src/kafka/core/travel-payments/events"
+
+@Injectable()
+export class TravelPaymentIntentService {
+  constructor(
+    private readonly stripeService: StripeService,
+    @InjectRepository(TravelPayment)
+    private paymentRepository: Repository<TravelPayment>,
+    private readonly queryCacheService: QueryCacheService,
+    private readonly kafkaService: KafkaService
+  ) {}
+
+  async updatePaymentIntent(
+    payment: TravelPayment,
+    data: {
+      method?: PaymentMethod
+      paid?: boolean
+    }
+  ) {
+    if (data.method !== undefined) {
+      payment.method = data.method
+      if (data.method === PaymentMethod.CASH) {
+        payment.client_secret = null
+        payment.stripe_payment_id = null
+      }
+    }
+
+    if (data.paid !== undefined) payment.paid = data.paid
+
+    const res = await this.queryCacheService.invalidate({
+      couples: [{ key: "TRAVEL_PAYMENT", all: true }],
+      promise: this.paymentRepository.save(payment)
+    })
+
+    this.kafkaService.sendTravelPaymentEvent(
+      new TravelPaymentUpdatedEvent({
+        booking_id: payment.booking_id,
+        method: payment.method,
+        paid: payment.paid
+      })
+    )
+    return res
+  }
+
+  deletePaymentIntent(payment: TravelPayment) {
+    return this.queryCacheService.invalidate({
+      couples: [{ key: "TRAVEL_PAYMENT", all: true }],
+      promise: this.paymentRepository.remove(payment)
+    })
+  }
+
+  findOneBy({
+    booking_id,
+    user_id,
+    stripe_payment_id
+  }: {
+    booking_id?: string
+    user_id?: number
+    stripe_payment_id?: string
+  }) {
+    const query = {}
+    if (booking_id) query["booking_id"] = booking_id
+    if (user_id) query["user_id"] = user_id
+    if (stripe_payment_id) query["stripe_payment_id"] = stripe_payment_id
+    return this.queryCacheService.get<TravelPayment>({
+      key: "TRAVEL_PAYMENT",
+      promise: this.paymentRepository.findOne({ where: query }),
+      value: JSON.stringify(query)
+    })
+  }
+
+  async createPaymentIntentSecret(payment: TravelPayment) {
+    const res = await this.stripeService.createPaymentIntent(payment.amount, "travel")
+    payment.client_secret = res.client_secret
+    payment.stripe_payment_id = res.id
+    const res2 = await this.queryCacheService.invalidate({
+      couples: [{ key: "TRAVEL_PAYMENT", all: true }],
+      promise: this.paymentRepository.save(payment)
+    })
+    return res2
+  }
+}

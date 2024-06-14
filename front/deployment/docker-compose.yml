@@ -1,0 +1,38 @@
+version: '3.8'
+services:
+  client:
+    image: xmitchix/2cs-front-client:1.0
+    networks:
+      - project-net
+    ports:
+      - 3000:3000
+    restart: on-failure
+
+  admin:
+    image: xmitchix/2cs-front-admin:1.0
+    networks:
+      - project-net
+    ports:
+      - 3001:3001 
+    restart: on-failure
+
+  hike-agent:
+    image: xmitchix/2cs-front-hike-agent:1.0
+    networks:
+      - project-net
+    ports:
+      - 3002:3002
+    restart: on-failure
+
+  travel-agent:
+    image: xmitchix/2cs-front-travel-agent:1.0
+    networks:
+      - project-net
+    ports:
+      - 3003:3003
+    restart: on-failure
+
+networks:
+  project-net:
+    name: project-net
+    external: true

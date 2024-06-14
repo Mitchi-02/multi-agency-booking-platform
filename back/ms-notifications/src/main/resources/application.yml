@@ -1,0 +1,60 @@
+server:
+  port: ${PORT}
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://ms-registry:8888/eureka
+
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
+    users-topic: ${USERS_TOPIC:users}
+    travel-bookings-topic: ${TRAVEL_BOOKINGS_TOPIC}
+    travel-payments-topic: ${TRAVEL_PAYMENTS_TOPIC}
+    travel-reviews-topic: ${TRAVEL_REVIEWS_TOPIC}
+    hike-bookings-topic: ${HIKE_BOOKINGS_TOPIC}
+    hike-payments-topic: ${HIKE_PAYMENTS_TOPIC}
+    hike-reviews-topic: ${HIKE_REVIEWS_TOPIC}
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: latest
+      group-id: ${spring.application.name}
+  application:
+    name: ms-notifications
+  data:
+    mongodb:
+      host: ${DB_HOST}
+      port: ${DB_PORT}
+      username: ${DB_USERNAME}
+      password: ${DB_PASSWORD}
+    redis:
+      database: 0
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      username: ${REDIS_USERNAME}
+      timeout: 60000
+  cache:
+    redis:
+      time-to-live: 120000
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    from: ${MAIL_FROM}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+

@@ -1,0 +1,896 @@
+networks:
+  project-net:
+    name: project-net
+    external: true
+
+services:
+  kafka:
+    image: bitnami/kafka:3.7.0
+    restart: always
+    ports:
+      - 9092:9092
+    volumes:
+      - ../../data/kafka:/bitnami/kafka
+    networks:
+      - project-net
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'kafka-topics.sh --bootstrap-server localhost:9092 --list',
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  init-kafka:
+    image: bitnami/kafka:3.7.0
+    depends_on:
+      - kafka
+    volumes:
+      - ./kafka.sh:/kafka.sh
+    environment:
+      - USERS_TOPIC=${KAFKA_USERS_TOPIC}
+      - TRAVELS_TOPIC=${KAFKA_TRAVELS_TOPIC}
+      - TRAVEL_AGENCIES_TOPIC=${KAFKA_TRAVEL_AGENCIES_TOPIC}
+      - TRAVEL_BOOKINGS_TOPIC=${KAFKA_TRAVEL_BOOKINGS_TOPIC}
+      - TRAVEL_PAYMENTS_TOPIC=${KAFKA_TRAVEL_PAYMENTS_TOPIC}
+      - TRAVEL_REVIEWS_TOPIC=${KAFKA_TRAVEL_REVIEWS_TOPIC}
+      - HIKES_TOPIC=${KAFKA_HIKES_TOPIC}
+      - HIKE_AGENCIES_TOPIC=${KAFKA_HIKE_AGENCIES_TOPIC}
+      - HIKE_BOOKINGS_TOPIC=${KAFKA_HIKE_BOOKINGS_TOPIC}
+      - HIKE_PAYMENTS_TOPIC=${KAFKA_HIKE_PAYMENTS_TOPIC}
+      - HIKE_REVIEWS_TOPIC=${KAFKA_HIKE_REVIEWS_TOPIC}
+    networks:
+      - project-net
+    command: "/bin/sh -c 'chmod +x /kafka.sh && ./kafka.sh'"
+
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 8800:8080
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - project-net
+    environment:
+      - DYNAMIC_CONFIG_ENABLED=true
+      - KAFKA_CLUSTERS_0_NAME=kafka
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+
+  adminer:
+    image: adminer:4.8.1-standalone
+    restart: always
+    ports:
+      - 8080:8080
+    networks:
+      - project-net
+
+  ms-users-db:
+    image: postgres:16.2-alpine3.19
+    restart: always
+    shm_size: 128mb
+    ports:
+      - 5432:5432
+    volumes:
+      - ../../data/ms-users-db:/var/lib/postgresql/data
+    networks:
+      - project-net
+    environment:
+      - POSTGRES_USER=${USERS_DB_USERNAME}
+      - POSTGRES_PASSWORD=${USERS_DB_PASSWORD}
+      - POSTGRES_DB=tripx
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-q', '-d', 'tripx', '-U', 'root']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-users-cache:
+    image: redis:7.2.4-alpine3.19
+    restart: always
+    networks:
+      - project-net
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${CACHE_PASSWORD}
+    volumes:
+      - ../../data/ms-users-cache:/data
+    ports:
+      - 6379:6379
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-notifications-db:
+    image: mongo:7.0-jammy
+    restart: always
+    ports:
+      - 27017:27017
+    volumes:
+      - ../../data/ms-notifications-db:/data/db
+    networks:
+      - project-net
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${NOTIFICATIONS_DB_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${NOTIFICATIONS_DB_PASSWORD}
+      - MONGO_INITDB_DATABASE=tripx
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'echo',
+          'db.stats().ok',
+          '|',
+          'mongo',
+          'localhost:27017/tripx',
+          '--quiet',
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-notifications-cache:
+    image: redis:7.2.4-alpine3.19
+    restart: always
+    networks:
+      - project-net
+    ports:
+      - 6378:6379
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${CACHE_PASSWORD}
+    volumes:
+      - ../../data/ms-notifications-cache:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-hikes-db:
+    image: mongo:7.0-jammy
+    restart: always
+    ports:
+      - 27018:27017
+    volumes:
+      - ../../data/ms-hikes-db:/data/db
+    networks:
+      - project-net
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${HIKES_DB_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${HIKES_DB_PASSWORD}
+      - MONGO_INITDB_DATABASE=tripx
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'echo',
+          'db.stats().ok',
+          '|',
+          'mongo',
+          'localhost:27017/tripx',
+          '--quiet',
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-hikes-cache:
+    image: redis:7.2.4-alpine3.19
+    restart: always
+    networks:
+      - project-net
+    ports:
+      - 6377:6379
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${CACHE_PASSWORD}
+    volumes:
+      - ../../data/ms-hikes-cache:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-travels-db:
+    image: mongo:7.0-jammy
+    restart: always
+    ports:
+      - 27019:27017
+    volumes:
+      - ../../data/ms-travels-db:/data/db
+    networks:
+      - project-net
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${TRAVELS_DB_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${TRAVELS_DB_PASSWORD}
+      - MONGO_INITDB_DATABASE=tripx
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'echo',
+          'db.stats().ok',
+          '|',
+          'mongo',
+          'localhost:27017/tripx',
+          '--quiet',
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-travels-cache:
+    image: redis:7.2.4-alpine3.19
+    restart: always
+    networks:
+      - project-net
+    ports:
+      - 6376:6379
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${CACHE_PASSWORD}
+    volumes:
+      - ../../data/ms-travels-cache:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-payment-db:
+    image: postgres:16.2-alpine3.19
+    restart: always
+    shm_size: 128mb
+    ports:
+      - 5433:5432
+    volumes:
+      - ../../data/ms-payment-db:/var/lib/postgresql/data
+    networks:
+      - project-net
+    environment:
+      - POSTGRES_USER=${PAYMENT_DB_USERNAME}
+      - POSTGRES_PASSWORD=${PAYMENT_DB_PASSWORD}
+      - POSTGRES_DB=tripx
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-q', '-d', 'tripx', '-U', 'root']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-payment-cache:
+    image: redis:7.2.4-alpine3.19
+    restart: always
+    networks:
+      - project-net
+    ports:
+      - 6375:6379
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${CACHE_PASSWORD}
+    volumes:
+      - ../../data/ms-payment-cache:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-requests-cache:
+    image: redis:7.2.4-alpine3.19
+    restart: always
+    networks:
+      - project-net
+    ports:
+      - 6374:6379
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${CACHE_PASSWORD}
+    volumes:
+      - ../../data/ms-requests-cache:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-requests-db:
+    image: mongo:7.0-jammy
+    restart: always
+    ports:
+      - 27020:27017
+    volumes:
+      - ../../data/ms-requests-db:/data/db
+    networks:
+      - project-net
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${REQUESTS_DB_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${REQUESTS_DB_PASSWORD}
+      - MONGO_INITDB_DATABASE=tripx
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'echo',
+          'db.stats().ok',
+          '|',
+          'mongo',
+          'localhost:27017/tripx',
+          '--quiet',
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-travels-query-db:
+    image: mongo:7.0-jammy
+    restart: always
+    ports:
+      - 27021:27017
+    volumes:
+      - ../../data/ms-travels-query-db:/data/db
+    networks:
+      - project-net
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${TRAVELS_DB_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${TRAVELS_DB_PASSWORD}
+      - MONGO_INITDB_DATABASE=tripx
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'echo',
+          'db.stats().ok',
+          '|',
+          'mongo',
+          'localhost:27017/tripx',
+          '--quiet',
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-travels-query-cache:
+    image: redis:7.2.4-alpine3.19
+    restart: always
+    networks:
+      - project-net
+    ports:
+      - 6380:6379
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${CACHE_PASSWORD}
+    volumes:
+      - ../../data/ms-travels-query-cache:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-hikes-query-db:
+    image: mongo:7.0-jammy
+    restart: always
+    ports:
+      - 27022:27017
+    volumes:
+      - ../../data/ms-hikes-query-db:/data/db
+    networks:
+      - project-net
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${HIKES_DB_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${HIKES_DB_PASSWORD}
+      - MONGO_INITDB_DATABASE=tripx
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'echo',
+          'db.stats().ok',
+          '|',
+          'mongo',
+          'localhost:27017/tripx',
+          '--quiet',
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-hikes-query-cache:
+    image: redis:7.2.4-alpine3.19
+    restart: always
+    networks:
+      - project-net
+    ports:
+      - 6381:6379
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${CACHE_PASSWORD}
+    volumes:
+      - ../../data/ms-hikes-query-cache:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 10s
+      start_interval: 2s
+
+  ms-registry:
+    image: xmitchix/2cs-back-ms-registry:1.0
+    volumes:
+      - ../../ms-registry/src/main:/app/src/main
+    networks:
+      - project-net
+    environment:
+      - PORT=8888
+      - ENVIRONMENT=development
+    ports:
+      - 8888:8888
+    restart: on-failure
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8888/test']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 20s
+      start_interval: 3s
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  ms-users:
+    image: xmitchix/2cs-back-ms-users:1.0
+    volumes:
+      - ../../ms-users/src/main:/app/src/main
+    networks:
+      - project-net
+    environment:
+      - PORT=8001
+      - ENVIRONMENT=development
+      - DB_HOST=ms-users-db
+      - DB_PORT=5432
+      - DB_USERNAME=${USERS_DB_USERNAME}
+      - DB_PASSWORD=${USERS_DB_PASSWORD}
+      - DB_DATABASE=tripx
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ISSUER=tripx
+      - GOOGLE_STORAGE_PROJECT_ID=${GOOGLE_STORAGE_PROJECT_ID}
+      - GOOGLE_STORAGE_CLIENT_EMAIL=${GOOGLE_STORAGE_CLIENT_EMAIL}
+      - GOOGLE_STORAGE_PRIVATE_KEY=${GOOGLE_STORAGE_PRIVATE_KEY}
+      - GOOGLE_STORAGE_BUCKET=${GOOGLE_STORAGE_BUCKET}
+      - GOOGLE_STORAGE_PRIVATE_KEY_ID=${GOOGLE_STORAGE_PRIVATE_KEY_ID}
+      - GOOGLE_STORAGE_CLIENT_ID=${GOOGLE_STORAGE_CLIENT_ID}
+      - REDIS_HOST=ms-users-cache
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=default
+      - REDIS_PASSWORD=${CACHE_PASSWORD}
+      - KAFKA_HOST=kafka
+      - KAFKA_PORT=9092
+      - USERS_TOPIC=${KAFKA_USERS_TOPIC}
+    ports:
+      - 8001:8001
+    restart: on-failure
+    depends_on:
+      ms-registry:
+        condition: service_healthy
+      ms-users-db:
+        condition: service_healthy
+      ms-users-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8001/test']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 20s
+      start_interval: 3s
+
+  ms-notifications:
+    image: xmitchix/2cs-back-ms-notifications:1.0
+    volumes:
+      - ../../ms-notifications/src/main:/app/src/main
+    networks:
+      - project-net
+    environment:
+      - PORT=8003
+      - ENVIRONMENT=development
+      - DB_HOST=ms-notifications-db
+      - DB_PORT=27017
+      - DB_USERNAME=${NOTIFICATIONS_DB_USERNAME}
+      - DB_PASSWORD=${NOTIFICATIONS_DB_PASSWORD}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - MAIL_FROM=${MAIL_FROM}
+      - REDIS_HOST=ms-notifications-cache
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=default
+      - REDIS_PASSWORD=${CACHE_PASSWORD}
+      - KAFKA_HOST=kafka
+      - KAFKA_PORT=9092
+      - USERS_TOPIC=${KAFKA_USERS_TOPIC}
+    ports:
+      - 8003:8003
+    restart: on-failure
+    depends_on:
+      ms-registry:
+        condition: service_healthy
+      ms-notifications-db:
+        condition: service_healthy
+      ms-notifications-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8003/test']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 20s
+      start_interval: 3s
+
+  ms-hikes:
+    image: xmitchix/2cs-back-ms-hikes-dev:1.0
+    volumes:
+      - ../../ms-hikes/src:/opt/api/ms-hikes/src
+    networks:
+      - project-net
+    environment:
+      - PORT=8004
+      - ENVIRONMENT=development
+      - EUREKA_HOST=ms-registry
+      - EUREKA_PORT=8888
+      - EUREKA_URL=/eureka/apps
+      - DB_HOST=ms-hikes-db
+      - DB_PORT=27017
+      - DB_USERNAME=${HIKES_DB_USERNAME}
+      - DB_PASSWORD=${HIKES_DB_PASSWORD}
+      - DB_DATABASE=tripx
+      - GOOGLE_STORAGE_PROJECT_ID=${GOOGLE_STORAGE_PROJECT_ID}
+      - GOOGLE_STORAGE_CLIENT_EMAIL=${GOOGLE_STORAGE_CLIENT_EMAIL}
+      - GOOGLE_STORAGE_PRIVATE_KEY=${GOOGLE_STORAGE_PRIVATE_KEY}
+      - GOOGLE_STORAGE_BUCKET=${GOOGLE_STORAGE_BUCKET}
+      - REDIS_HOST=ms-hikes-cache
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=default
+      - REDIS_PASSWORD=${CACHE_PASSWORD}
+      - KAFKA_HOST=kafka
+      - KAFKA_PORT=9092
+      - USERS_TOPIC=${KAFKA_USERS_TOPIC}
+      - HIKES_TOPIC=${KAFKA_HIKES_TOPIC}
+      - HIKE_AGENCIES_TOPIC=${KAFKA_HIKE_AGENCIES_TOPIC}
+      - HIKE_BOOKINGS_TOPIC=${KAFKA_HIKE_BOOKINGS_TOPIC}
+      - HIKE_PAYMENTS_TOPIC=${KAFKA_HIKE_PAYMENTS_TOPIC}
+      - HIKE_REVIEWS_TOPIC=${KAFKA_HIKE_REVIEWS_TOPIC}
+    ports:
+      - 8004:8004
+    restart: on-failure
+    depends_on:
+      ms-registry:
+        condition: service_healthy
+      ms-hikes-db:
+        condition: service_healthy
+      ms-users:
+        condition: service_healthy
+      ms-payment:
+        condition: service_healthy
+      ms-hikes-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8004/test']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 20s
+      start_interval: 3s
+
+  ms-travels:
+    image: xmitchix/2cs-back-ms-travels-dev:1.0
+    volumes:
+      - ../../ms-travels/src:/opt/api/ms-travels/src
+    networks:
+      - project-net
+    environment:
+      - PORT=8005
+      - ENVIRONMENT=development
+      - EUREKA_HOST=ms-registry
+      - EUREKA_PORT=8888
+      - EUREKA_URL=/eureka/apps
+      - DB_HOST=ms-travels-db
+      - DB_PORT=27017
+      - DB_USERNAME=${TRAVELS_DB_USERNAME}
+      - DB_PASSWORD=${TRAVELS_DB_PASSWORD}
+      - DB_DATABASE=tripx
+      - GOOGLE_STORAGE_PROJECT_ID=${GOOGLE_STORAGE_PROJECT_ID}
+      - GOOGLE_STORAGE_CLIENT_EMAIL=${GOOGLE_STORAGE_CLIENT_EMAIL}
+      - GOOGLE_STORAGE_PRIVATE_KEY=${GOOGLE_STORAGE_PRIVATE_KEY}
+      - GOOGLE_STORAGE_BUCKET=${GOOGLE_STORAGE_BUCKET}
+      - REDIS_HOST=ms-travels-cache
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=default
+      - REDIS_PASSWORD=${CACHE_PASSWORD}
+      - KAFKA_HOST=kafka
+      - KAFKA_PORT=9092
+      - USERS_TOPIC=${KAFKA_USERS_TOPIC}
+      - TRAVELS_TOPIC=${KAFKA_TRAVELS_TOPIC}
+      - TRAVEL_AGENCIES_TOPIC=${KAFKA_TRAVEL_AGENCIES_TOPIC}
+      - TRAVEL_BOOKINGS_TOPIC=${KAFKA_TRAVEL_BOOKINGS_TOPIC}
+      - TRAVEL_PAYMENTS_TOPIC=${KAFKA_TRAVEL_PAYMENTS_TOPIC}
+      - TRAVEL_REVIEWS_TOPIC=${KAFKA_TRAVEL_REVIEWS_TOPIC}
+    ports:
+      - 8005:8005
+    restart: on-failure
+    depends_on:
+      ms-registry:
+        condition: service_healthy
+      ms-travels-db:
+        condition: service_healthy
+      ms-users:
+        condition: service_healthy
+      ms-payment:
+        condition: service_healthy
+      ms-travels-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8005/test']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 20s
+      start_interval: 3s
+
+  ms-payment:
+    image: xmitchix/2cs-back-ms-payment-dev:1.0
+    volumes:
+      - ../../ms-payment/src:/opt/api/ms-payment/src
+    networks:
+      - project-net
+    environment:
+      - PORT=8006
+      - ENVIRONMENT=development
+      - EUREKA_HOST=ms-registry
+      - EUREKA_PORT=8888
+      - EUREKA_URL=/eureka/apps
+      - DB_CONNECTION=postgres
+      - DB_HOST=ms-payment-db
+      - DB_PORT=5432
+      - DB_USERNAME=${PAYMENT_DB_USERNAME}
+      - DB_PASSWORD=${PAYMENT_DB_PASSWORD}
+      - DB_DATABASE=tripx
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - REDIS_HOST=ms-payment-cache
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=default
+      - REDIS_PASSWORD=${CACHE_PASSWORD}
+      - KAFKA_HOST=kafka
+      - KAFKA_PORT=9092
+      - USERS_TOPIC=${KAFKA_USERS_TOPIC}
+      - TRAVEL_BOOKINGS_TOPIC=${KAFKA_TRAVEL_BOOKINGS_TOPIC}
+      - TRAVEL_PAYMENTS_TOPIC=${KAFKA_TRAVEL_PAYMENTS_TOPIC}
+      - HIKE_BOOKINGS_TOPIC=${KAFKA_HIKE_BOOKINGS_TOPIC}
+      - HIKE_PAYMENTS_TOPIC=${KAFKA_HIKE_PAYMENTS_TOPIC}
+    ports:
+      - 8006:8006
+    restart: on-failure
+    depends_on:
+      ms-registry:
+        condition: service_healthy
+      ms-payment-db:
+        condition: service_healthy
+      ms-payment-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8006/test']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 20s
+      start_interval: 3s
+
+  ms-requests:
+    image: xmitchix/2cs-back-ms-requests-dev:1.0
+    volumes:
+      - ../../ms-requests/src:/opt/api/ms-requests/src
+    networks:
+      - project-net
+    environment:
+      - PORT=8007
+      - ENVIRONMENT=development
+      - EUREKA_HOST=ms-registry
+      - EUREKA_PORT=8888
+      - EUREKA_URL=/eureka/apps
+      - DB_HOST=ms-requests-db
+      - DB_PORT=27017
+      - DB_USERNAME=${REQUESTS_DB_USERNAME}
+      - DB_PASSWORD=${REQUESTS_DB_PASSWORD}
+      - DB_DATABASE=tripx
+      - REDIS_HOST=ms-requests-cache
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=default
+      - REDIS_PASSWORD=${CACHE_PASSWORD}
+    ports:
+      - 8007:8007
+    restart: on-failure
+    depends_on:
+      ms-registry:
+        condition: service_healthy
+      ms-requests-db:
+        condition: service_healthy
+      ms-requests-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8007/test']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 20s
+      start_interval: 3s
+
+  ms-travels-query:
+    image: xmitchix/2cs-back-ms-travels-query-dev:1.0
+    volumes:
+      - ../../ms-travels-query/src:/opt/api/ms-travels-query/src
+    networks:
+      - project-net
+    environment:
+      - PORT=8008
+      - ENVIRONMENT=development
+      - EUREKA_HOST=ms-registry
+      - EUREKA_PORT=8888
+      - EUREKA_URL=/eureka/apps
+      - DB_HOST=ms-travels-query-db
+      - DB_PORT=27017
+      - DB_USERNAME=${TRAVELS_DB_USERNAME}
+      - DB_PASSWORD=${TRAVELS_DB_PASSWORD}
+      - DB_DATABASE=tripx
+      - REDIS_HOST=ms-travels-query-cache
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=default
+      - REDIS_PASSWORD=${CACHE_PASSWORD}
+      - KAFKA_HOST=kafka
+      - KAFKA_PORT=9092
+      - USERS_TOPIC=${KAFKA_USERS_TOPIC}
+      - TRAVELS_TOPIC=${KAFKA_TRAVELS_TOPIC}
+      - TRAVEL_AGENCIES_TOPIC=${KAFKA_TRAVEL_AGENCIES_TOPIC}
+      - TRAVEL_BOOKINGS_TOPIC=${KAFKA_TRAVEL_BOOKINGS_TOPIC}
+      - TRAVEL_PAYMENTS_TOPIC=${KAFKA_TRAVEL_PAYMENTS_TOPIC}
+      - TRAVEL_REVIEWS_TOPIC=${KAFKA_TRAVEL_REVIEWS_TOPIC}
+    ports:
+      - 8008:8008
+    restart: on-failure
+    depends_on:
+      ms-registry:
+        condition: service_healthy
+      ms-travels-query-db:
+        condition: service_healthy
+      ms-users:
+        condition: service_healthy
+      ms-travels:
+        condition: service_healthy
+      ms-travels-query-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8008/test']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 20s
+      start_interval: 3s
+
+  ms-hikes-query:
+    image: xmitchix/2cs-back-ms-hikes-query-dev:1.0
+    volumes:
+      - ../../ms-hikes-query/src:/opt/api/ms-hikes-query/src
+    networks:
+      - project-net
+    environment:
+      - PORT=8009
+      - ENVIRONMENT=development
+      - EUREKA_HOST=ms-registry
+      - EUREKA_PORT=8888
+      - EUREKA_URL=/eureka/apps
+      - DB_HOST=ms-hikes-query-db
+      - DB_PORT=27017
+      - DB_USERNAME=${HIKES_DB_USERNAME}
+      - DB_PASSWORD=${HIKES_DB_PASSWORD}
+      - DB_DATABASE=tripx
+      - REDIS_HOST=ms-hikes-query-cache
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=default
+      - REDIS_PASSWORD=${CACHE_PASSWORD}
+      - KAFKA_HOST=kafka
+      - KAFKA_PORT=9092
+      - USERS_TOPIC=${KAFKA_USERS_TOPIC}
+      - HIKES_TOPIC=${KAFKA_HIKES_TOPIC}
+      - HIKE_AGENCIES_TOPIC=${KAFKA_HIKE_AGENCIES_TOPIC}
+      - HIKE_BOOKINGS_TOPIC=${KAFKA_HIKE_BOOKINGS_TOPIC}
+      - HIKE_PAYMENTS_TOPIC=${KAFKA_HIKE_PAYMENTS_TOPIC}
+      - HIKE_REVIEWS_TOPIC=${KAFKA_HIKE_REVIEWS_TOPIC}
+    ports:
+      - 8009:8009
+    restart: on-failure
+    depends_on:
+      ms-registry:
+        condition: service_healthy
+      ms-hikes-query-db:
+        condition: service_healthy
+      ms-users:
+        condition: service_healthy
+      ms-hikes:
+        condition: service_healthy
+      ms-hikes-query-cache:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8009/test']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 20s
+      start_interval: 3s
+
+  ms-gateway:
+    image: xmitchix/2cs-back-ms-gateway:1.0
+    volumes:
+      - ../../ms-gateway/src/main:/app/src/main
+    networks:
+      - project-net
+    environment:
+      - PORT=8000
+      - ENVIRONMENT=development
+    ports:
+      - 8000:8000
+    restart: on-failure
+    depends_on:
+      ms-registry:
+        condition: service_healthy
+      ms-users:
+        condition: service_healthy
+      ms-notifications:
+        condition: service_healthy
+      ms-hikes:
+        condition: service_healthy
+      ms-travels:
+        condition: service_healthy
+      ms-payment:
+        condition: service_healthy
+      ms-requests:
+        condition: service_healthy
+      ms-travels-query:
+        condition: service_healthy
+      ms-hikes-query:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8000/test']
+      interval: 20s
+      timeout: 10s
+      retries: 100
+      start_period: 20s
+      start_interval: 3s

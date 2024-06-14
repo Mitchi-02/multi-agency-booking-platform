@@ -1,0 +1,79 @@
+server:
+  port: ${PORT}
+  
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://ms-registry:8888/eureka
+
+spring:
+  application:
+    name: ms-gateway
+  cloud:
+    gateway:
+      global-filter:
+        - AuthFilter
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+      routes:
+        - id: route1
+          predicates:
+            - Path=/ms-users/**
+          filters:
+            - RewritePath=/ms-users/(?<s>.*), /${s}
+          uri: lb://ms-users
+
+        - id: route2
+          predicates:
+            - Path=/ms-notifications/**
+          filters:
+            - RewritePath=/ms-notifications/(?<s>.*), /${s}
+          uri: lb://ms-notifications
+
+        - id: route3
+          predicates:
+            - Path=/ms-hikes/**
+          filters:
+            - RewritePath=/ms-hikes/(?<s>.*), /${s}
+          uri: lb://ms-hikes
+        
+        - id: route4
+          predicates:
+            - Path=/ms-travels/**
+          filters:
+            - RewritePath=/ms-travels/(?<s>.*), /${s}
+          uri: lb://ms-travels
+
+        - id: route5
+          predicates:
+            - Path=/ms-payment/**
+          filters:
+            - RewritePath=/ms-payment/(?<s>.*), /${s}
+          uri: lb://ms-payment
+
+        - id: route6
+          predicates:
+            - Path=/ms-requests/**
+          filters:
+            - RewritePath=/ms-requests/(?<s>.*), /${s}
+          uri: lb://ms-requests
+        
+        - id: route7
+          predicates:
+            - Path=/ms-travels-query/**
+          filters:
+            - RewritePath=/ms-travels-query/(?<s>.*), /${s}
+          uri: lb://ms-travels-query
+        
+        - id: route8
+          predicates:
+            - Path=/ms-hikes-query/**
+          filters:
+            - RewritePath=/ms-hikes-query/(?<s>.*), /${s}
+          uri: lb://ms-hikes-query

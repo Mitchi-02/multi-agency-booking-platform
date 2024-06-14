@@ -1,0 +1,52 @@
+stages:
+  - build
+  - deploy
+
+.default_rules:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+
+variables:
+  GIT_CLONE_PATH: $CI_BUILDS_DIR/$CI_PROJECT_NAME
+
+after_script:
+  - echo "DONE.."
+
+build_images:
+  rules:
+    - !reference [.default_rules, rules]
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
+  script:
+    - cd $CI_BUILDS_DIR/$CI_PROJECT_NAME/deployment
+    - echo "NEXT_PUBLIC_SESSION_SECRET=$CI_CLIENT_SESSION_SECRET" >> $CI_BUILDS_DIR/$CI_PROJECT_NAME/client/.env.local
+    - echo "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$CI_STRIPE_PUBLISHABLE_KEY" >> $CI_BUILDS_DIR/$CI_PROJECT_NAME/client/.env.local
+
+    - echo "NEXT_PUBLIC_SESSION_SECRET=$CI_CLIENT_SESSION_SECRET" >> $CI_BUILDS_DIR/$CI_PROJECT_NAME/admin/.env.local
+    - echo "NEXT_PUBLIC_SESSION_SECRET=$CI_CLIENT_SESSION_SECRET" >> $CI_BUILDS_DIR/$CI_PROJECT_NAME/hike-agent/.env.local
+    - echo "NEXT_PUBLIC_SESSION_SECRET=$CI_CLIENT_SESSION_SECRET" >> $CI_BUILDS_DIR/$CI_PROJECT_NAME/travel-agent/.env.local
+
+    - chmod +x build.sh
+    - ./build.sh
+  timeout: 3 hours
+  tags:
+    - 2cs-front
+
+deploy1:
+  rules:
+    - !reference [.default_rules, rules]
+  stage: deploy
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
+  script:
+    - cd $CI_BUILDS_DIR/$CI_PROJECT_NAME/deployment/
+    - docker compose --file docker-compose.yml down --rmi all
+    - docker compose --file docker-compose.yml pull
+    - docker compose --file docker-compose.yml up -d
+  environment: production
+  tags:
+    - 2cs-front

@@ -1,0 +1,13 @@
+package project.back.msnotifications.entities;
+
+
+public enum NotificationType {
+  TRAVEL_BOOKING_UPDATED,
+  TRAVEL_BOOKING_CREATED,
+  HIKE_BOOKING_UPDATED,
+  HIKE_BOOKING_CREATED,
+  HIKE_PAYMENT,
+  TRAVEL_PAYYMENT,
+  HIKE_REVIEW,
+  TRAVEL_REVIEW
+}

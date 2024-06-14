@@ -1,0 +1,17 @@
+{
+  "extends": ["next/core-web-vitals", "plugin:@tanstack/eslint-plugin-query/recommended"],
+  "globals": {
+    "React": "readonly"
+  },
+  "rules": {
+    "no-unused-vars": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["*.ts", "*.tsx"],
+      "rules": {
+        "@tanstack/query/exhaustive-deps": "off"
+      }
+    }
+  ]
+}

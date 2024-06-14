@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/back.iml" filepath="$PROJECT_DIR$/back.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ms-users/ms-users.iml" filepath="$PROJECT_DIR$/ms-users/ms-users.iml" />
+    </modules>
+  </component>
+</project>

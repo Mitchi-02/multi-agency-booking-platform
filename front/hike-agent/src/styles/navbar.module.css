@@ -1,0 +1,47 @@
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: #fff;
+  color: #84878B;
+}
+
+.logo img {
+  height: 40px;
+}
+
+.language {
+  position: relative;
+}
+
+.languageSelector {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.flag {
+  font-size: 20px;
+  margin-right: 5px;
+}
+
+.languageDropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: #333;
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  z-index: 10;
+}
+
+.languageOption {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+  cursor: pointer;
+}
+
+/* Add any additional styles or animations as needed */
