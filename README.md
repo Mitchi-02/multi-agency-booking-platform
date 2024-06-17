@@ -1,5 +1,5 @@
 # Multi-Agency Booking Platform
-
+Micro-services based booking platform, with a micro-frontends architecture, for travel and hike agencies.
 ## Getting Started
 
 ### Clone the Repository
