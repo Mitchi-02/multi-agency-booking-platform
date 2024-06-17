@@ -4,7 +4,7 @@
 
 ### Clone the Repository
   ```bash
-  git clone https://gitlab.com/mitchi-02/multi-booking-platform.git
+  git clone https://github.com/Mitchi-02/multi-agency-booking-platform.git
   ```
 ### To start the services, follow the steps below:
 
